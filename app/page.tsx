@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Editorial,
   AiPrepAnalysis,
@@ -8,7 +8,11 @@ import {
   BestPractice,
   EditorialListItem,
   EditorialListResponse,
+  SavedAnalysis,
+  PrepAnalysis,
 } from "./types";
+
+const STORAGE_KEY = "prep-master-saved-analyses";
 
 type HighlightType = "point1" | "reason" | "example" | "point2";
 
@@ -61,6 +65,62 @@ export default function Home() {
   const [activeHighlight, setActiveHighlight] = useState<HighlightType | null>(
     null
   );
+
+  // 저장 관련 상태
+  const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
+  const [showSavedList, setShowSavedList] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // LocalStorage에서 저장된 분석 불러오기
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        setSavedAnalyses(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse saved analyses:", e);
+      }
+    }
+  }, []);
+
+  // 현재 분석 저장하기
+  const saveCurrentAnalysis = useCallback(() => {
+    if (!editorial || !aiAnalysis) return;
+
+    const prep: PrepAnalysis = {
+      point1: aiAnalysis.point1.sourceText,
+      reason: aiAnalysis.reason.sourceText,
+      example: aiAnalysis.example.sourceText,
+      point2: aiAnalysis.point2.sourceText,
+    };
+
+    const newSaved: SavedAnalysis = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      editorial,
+      prep,
+      savedAt: new Date().toISOString(),
+    };
+
+    const updated = [newSaved, ...savedAnalyses];
+    setSavedAnalyses(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
+  }, [editorial, aiAnalysis, savedAnalyses]);
+
+  // 저장된 분석 삭제하기
+  const deleteAnalysis = useCallback((id: string) => {
+    const updated = savedAnalyses.filter((a) => a.id !== id);
+    setSavedAnalyses(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  }, [savedAnalyses]);
+
+  // 이미 저장된 분석인지 확인
+  const isAlreadySaved = useMemo(() => {
+    if (!editorial) return false;
+    return savedAnalyses.some((a) => a.editorial.link === editorial.link);
+  }, [editorial, savedAnalyses]);
 
   // 사설 목록 가져오기
   const fetchEditorialList = async () => {
@@ -212,12 +272,29 @@ export default function Home() {
       {/* 헤더 */}
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/80">
         <div className="mx-auto max-w-7xl px-4 py-6">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            PREP Master
-          </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            한경 사설 분석기 - 읽기만 하는 사설에서, 내 논리로 만드는 사설로
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                PREP Master
+              </h1>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                한경 사설 분석기 - 읽기만 하는 사설에서, 내 논리로 만드는 사설로
+              </p>
+            </div>
+            <button
+              onClick={() => setShowSavedList(!showSavedList)}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                showSavedList
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+              }`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              저장됨 ({savedAnalyses.length})
+            </button>
+          </div>
         </div>
       </header>
 
@@ -277,6 +354,74 @@ export default function Home() {
         {error && (
           <div className="mb-8 rounded-lg bg-red-50 p-4 text-center text-red-600 dark:bg-red-900/20 dark:text-red-400">
             {error}
+          </div>
+        )}
+
+        {/* 저장된 분석 목록 */}
+        {showSavedList && (
+          <div className="mb-8">
+            <div className="rounded-xl bg-white p-6 shadow-lg dark:bg-slate-800">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                  저장된 분석 ({savedAnalyses.length}개)
+                </h2>
+                <button
+                  onClick={() => setShowSavedList(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {savedAnalyses.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                  <svg className="h-12 w-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                  <p>저장된 분석이 없습니다.</p>
+                  <p className="text-sm mt-1">사설을 분석한 후 저장해보세요!</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {savedAnalyses.map((saved) => (
+                    <div
+                      key={saved.id}
+                      className="flex items-start justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-slate-900 dark:text-white truncate">
+                          {saved.editorial.title}
+                        </h3>
+                        <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          <span>{saved.editorial.date}</span>
+                          <span>•</span>
+                          <span>저장: {new Date(saved.savedAt).toLocaleDateString("ko-KR")}</span>
+                        </div>
+                        <a
+                          href={saved.editorial.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline dark:text-blue-400 mt-1 inline-block"
+                        >
+                          원문 보기 →
+                        </a>
+                      </div>
+                      <button
+                        onClick={() => deleteAnalysis(saved.id)}
+                        className="ml-3 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="삭제"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -345,8 +490,8 @@ export default function Home() {
         {/* 메인 콘텐츠 - 2단 레이아웃 */}
         {editorial && aiAnalysis && bestPractice && (
           <>
-            {/* 뒤로가기 버튼 */}
-            <div className="mb-4">
+            {/* 뒤로가기 + 저장 버튼 */}
+            <div className="mb-4 flex items-center justify-between">
               <button
                 onClick={() => {
                   setEditorial(null);
@@ -370,6 +515,41 @@ export default function Home() {
                   />
                 </svg>
                 목록으로 돌아가기
+              </button>
+
+              <button
+                onClick={saveCurrentAnalysis}
+                disabled={isAlreadySaved}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                  saveSuccess
+                    ? "bg-green-500 text-white"
+                    : isAlreadySaved
+                    ? "bg-slate-200 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {saveSuccess ? (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    저장됨!
+                  </>
+                ) : isAlreadySaved ? (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    이미 저장됨
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                    분석 저장
+                  </>
+                )}
               </button>
             </div>
 
@@ -624,7 +804,7 @@ export default function Home() {
       {/* 푸터 */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-6 dark:border-slate-700 dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-4 text-center text-sm text-slate-500 dark:text-slate-400">
-          PREP Master v2 - 논리적 글쓰기 훈련 도구
+          PREP Master v3 - 논리적 글쓰기 훈련 도구
         </div>
       </footer>
     </div>
