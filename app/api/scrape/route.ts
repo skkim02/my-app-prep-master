@@ -146,14 +146,14 @@ function analyzePREP(content: string, title: string): AiPrepAnalysis {
   };
 }
 
-// Best Practice 생성 함수
+// Best Practice 생성 함수 - 다른 사람에게 주장하듯이 작성
 function generateBestPractice(
   title: string,
   aiAnalysis: AiPrepAnalysis
 ): BestPractice {
   const cleanTitle = title.replace(/\[사설\]\s*/, "");
 
-  const extractKeyPhrase = (text: string, maxLen: number = 50): string => {
+  const extractKeyPhrase = (text: string, maxLen: number = 80): string => {
     if (text.length <= maxLen) return text;
     const shortened = text.slice(0, maxLen);
     const lastSpace = shortened.lastIndexOf(" ");
@@ -163,19 +163,19 @@ function generateBestPractice(
   };
 
   return {
-    point1: `이 사설의 핵심 주장은 "${cleanTitle}"입니다. 필자는 현재 정책/법안의 근본적인 결함을 지적하며, 이에 대한 재검토가 필요하다고 주장합니다.`,
-    reason: `주장의 근거로는 ${extractKeyPhrase(
+    point1: `저는 "${cleanTitle}"에 대해 말씀드리고 싶습니다. 지금 이 문제가 왜 중요한지 아시나요? 현재 상황을 그냥 두면 안 되는 이유가 분명히 있습니다.`,
+    reason: `왜 그렇게 생각하냐고요? ${extractKeyPhrase(
       aiAnalysis.reason.sourceText,
-      80
-    )}를 제시합니다. 이는 정책의 모호함과 불명확한 기준이 실제 현장에서 혼란을 야기할 수 있음을 보여줍니다.`,
-    example: `구체적인 사례로 ${extractKeyPhrase(
+      100
+    )} 이런 상황이 계속되면 문제는 더 심각해질 수밖에 없습니다.`,
+    example: `실제로 어떤 일이 벌어지고 있는지 보여드리겠습니다. ${extractKeyPhrase(
       aiAnalysis.example.sourceText,
-      80
-    )}를 들어 주장을 뒷받침합니다. 이러한 실제 사례는 이론적 비판을 넘어 현실적인 문제점을 부각시킵니다.`,
-    point2: `결론적으로, 필자는 ${extractKeyPhrase(
+      100
+    )} 이건 단순한 이론이 아니라 지금 현실에서 일어나고 있는 일입니다.`,
+    point2: `그래서 제가 드리고 싶은 말씀은 이겁니다. ${extractKeyPhrase(
       aiAnalysis.point2.sourceText,
-      60
-    )}라고 강조합니다. 미봉책이 아닌 근본적인 해결책이 필요하다는 것이 이 사설의 핵심 메시지입니다.`,
+      80
+    )} 더 이상 미룰 수 없는 문제입니다. 지금 바로 변화가 필요합니다.`,
   };
 }
 
