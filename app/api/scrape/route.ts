@@ -161,49 +161,68 @@ function generateBestPractice(
   };
 }
 
-// 사설 목록 가져오기 (RSS 피드 사용)
+// 매일경제 사설 목록 가져오기
 async function fetchEditorialList(): Promise<EditorialListItem[]> {
-  const rssUrl = "https://www.hankyung.com/feed/opinion";
-  const rssRes = await fetch(rssUrl, {
+  const listUrl = "https://www.mk.co.kr/opinion/editorial/";
+  const listRes = await fetch(listUrl, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; PREPMaster/1.0)",
-      Accept: "application/rss+xml, application/xml, text/xml",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     },
     next: { revalidate: 0 },
   });
 
-  if (!rssRes.ok) {
-    throw new Error(`Failed to fetch RSS feed (HTTP ${rssRes.status})`);
+  if (!listRes.ok) {
+    throw new Error(`Failed to fetch editorial list (HTTP ${listRes.status})`);
   }
 
-  const rssXml = await rssRes.text();
-  const $ = cheerio.load(rssXml, { xmlMode: true });
+  const listHtml = await listRes.text();
+  const $ = cheerio.load(listHtml);
 
   const editorials: EditorialListItem[] = [];
+  const seenLinks = new Set<string>();
 
-  $("item").each((_, el) => {
-    const title = $(el).find("title").text().trim();
-    const link = $(el).find("link").text().trim();
-    const pubDate = $(el).find("pubDate").text().trim();
+  // 매일경제 사설 링크 패턴: https://www.mk.co.kr/news/editorial/XXXXXXXX
+  $('a[href*="/news/editorial/"]').each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href || seenLinks.has(href)) return;
 
-    // [사설] 태그가 있는 글만 필터링
-    if (title.includes("[사설]")) {
-      // pubDate를 YYYY.MM.DD 형식으로 변환
-      const dateObj = new Date(pubDate);
-      const date = `${dateObj.getFullYear()}.${String(dateObj.getMonth() + 1).padStart(2, "0")}.${String(dateObj.getDate()).padStart(2, "0")}`;
+    // 기사 번호가 있는 링크만 선택
+    const match = href.match(/\/news\/editorial\/(\d+)/);
+    if (!match) return;
 
-      editorials.push({
-        title,
-        link,
-        date,
-      });
+    seenLinks.add(href);
+
+    // 제목 찾기 - 링크 내부 또는 인접 요소에서
+    let title = $(el).text().trim();
+    if (!title || title.length < 5) {
+      title = $(el).find("h3, h2, .news_ttl").text().trim();
     }
+    if (!title || title.length < 5) {
+      title = $(el).closest("li, div").find("h3, h2, .news_ttl").text().trim();
+    }
+
+    // 제목이 없거나 너무 짧으면 스킵
+    if (!title || title.length < 5) return;
+
+    // 날짜는 URL이나 페이지에서 추출이 어려우므로 오늘 날짜 사용
+    const today = new Date();
+    const date = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
+
+    editorials.push({
+      title: title.includes("[사설]") ? title : `[사설] ${title}`,
+      link: href.startsWith("http") ? href : `https://www.mk.co.kr${href}`,
+      date,
+    });
   });
 
   return editorials;
 }
 
-// 사설 상세 가져오기
+// 매일경제 사설 상세 가져오기
 async function fetchEditorialDetail(articleUrl: string): Promise<Editorial> {
   const articleRes = await fetch(articleUrl, {
     headers: {
@@ -212,52 +231,55 @@ async function fetchEditorialDetail(articleUrl: string): Promise<Editorial> {
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
       "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Cache-Control": "no-cache",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
     },
     next: { revalidate: 0 },
   });
 
   if (!articleRes.ok) {
-    throw new Error("Failed to fetch article");
+    throw new Error(`Failed to fetch article (HTTP ${articleRes.status})`);
   }
 
   const articleHtml = await articleRes.text();
-  const $article = cheerio.load(articleHtml);
+  const $ = cheerio.load(articleHtml);
 
+  // 제목 추출
   const title =
-    $article("h1.headline").text().trim() ||
-    $article(".article-headline").text().trim() ||
-    $article("h1").first().text().trim();
+    $("h2.news_ttl").first().text().trim() ||
+    $('meta[property="og:title"]').attr("content")?.replace(" - 매일경제", "") ||
+    $("title").text().replace(" - 매일경제", "").trim();
 
+  // 본문 추출 - itemprop="articleBody" 사용
   let content = "";
-  const articleBody = $article("#articletxt");
+  const articleBody = $('[itemprop="articleBody"]');
 
   if (articleBody.length) {
-    const paragraphs: string[] = [];
-    articleBody.find("p").each((_, el) => {
-      const text = $article(el).text().trim();
-      if (text && !text.includes("ⓒ") && !text.includes("ADVERTISEMENT")) {
-        paragraphs.push(text);
-      }
-    });
+    // HTML 태그 제거하고 텍스트만 추출
+    content = articleBody
+      .html()
+      ?.replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .trim() || "";
+  }
 
-    if (paragraphs.length > 0) {
-      content = paragraphs.join("\n\n");
+  // 본문이 없으면 meta description 사용
+  if (!content) {
+    content = $('meta[property="og:description"]').attr("content") || "";
+  }
+
+  // 날짜 추출
+  let date = "";
+  const dateMatch = articleHtml.match(/'paper_date':\s*'(\d{4}-\d{2}-\d{2})'/);
+  if (dateMatch) {
+    date = dateMatch[1].replace(/-/g, ".");
+  } else {
+    const datePublished = $('meta[property="article:published_time"]').attr("content");
+    if (datePublished) {
+      const d = new Date(datePublished);
+      date = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
     } else {
-      content = articleBody.text().trim();
+      date = new Date().toLocaleDateString("ko-KR");
     }
   }
-
-  if (!content) {
-    content =
-      $article(".article-body").text().trim() ||
-      $article(".article-content").text().trim();
-  }
-
-  const dateText = $article(".txt-date").first().text().trim();
-  const date = dateText || new Date().toLocaleDateString("ko-KR");
 
   return {
     title: title || "제목을 찾을 수 없습니다",

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PREP Master - 한경 사설 분석기",
-  description: "한국경제 사설을 PREP 구조로 분석하고 논리적 글쓰기 실력을 키워보세요",
+  title: "PREP Master - 매경 사설 분석기",
+  description: "매일경제 사설을 PREP 구조로 분석하고 논리적 글쓰기 실력을 키워보세요",
 };
 
 export default function RootLayout({

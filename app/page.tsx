@@ -277,7 +277,7 @@ export default function Home() {
                 PREP Master
               </h1>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                한경 사설 분석기 - 읽기만 하는 사설에서, 내 논리로 만드는 사설로
+                매경 사설 분석기 - 읽기만 하는 사설에서, 내 논리로 만드는 사설로
               </p>
             </div>
             <button
@@ -558,7 +558,7 @@ export default function Home() {
                 <div className="mb-4 flex items-start justify-between">
                   <div>
                     <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                      한국경제 사설
+                      매일경제 사설
                     </span>
                     <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                       {editorial.date}
@@ -792,7 +792,7 @@ export default function Home() {
                 시작하기
               </h2>
               <p className="text-slate-600 dark:text-slate-400">
-                위의 &quot;사설 목록 가져오기&quot; 버튼을 클릭하여 한국경제
+                위의 &quot;사설 목록 가져오기&quot; 버튼을 클릭하여 매일경제
                 사설 목록을 불러오고, 분석할 사설을 선택하세요.
               </p>
             </div>
