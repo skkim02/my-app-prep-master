@@ -161,58 +161,40 @@ function generateBestPractice(
   };
 }
 
-// 사설 목록 가져오기
+// 사설 목록 가져오기 (RSS 피드 사용)
 async function fetchEditorialList(): Promise<EditorialListItem[]> {
-  const listUrl = "https://www.hankyung.com/opinion/0001";
-  const listRes = await fetch(listUrl, {
+  const rssUrl = "https://www.hankyung.com/feed/opinion";
+  const rssRes = await fetch(rssUrl, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "none",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
+      "User-Agent": "Mozilla/5.0 (compatible; PREPMaster/1.0)",
+      Accept: "application/rss+xml, application/xml, text/xml",
     },
     next: { revalidate: 0 },
   });
 
-  if (!listRes.ok) {
-    throw new Error(`Failed to fetch editorial list (HTTP ${listRes.status})`);
+  if (!rssRes.ok) {
+    throw new Error(`Failed to fetch RSS feed (HTTP ${rssRes.status})`);
   }
 
-  const listHtml = await listRes.text();
-  const $list = cheerio.load(listHtml);
+  const rssXml = await rssRes.text();
+  const $ = cheerio.load(rssXml, { xmlMode: true });
 
   const editorials: EditorialListItem[] = [];
-  const seenLinks = new Set<string>();
 
-  $list("a").each((_, el) => {
-    const text = $list(el).text().trim();
-    const href = $list(el).attr("href");
+  $("item").each((_, el) => {
+    const title = $(el).find("title").text().trim();
+    const link = $(el).find("link").text().trim();
+    const pubDate = $(el).find("pubDate").text().trim();
 
-    if (
-      text.includes("[사설]") &&
-      href &&
-      href.includes("/article/") &&
-      !seenLinks.has(href)
-    ) {
-      seenLinks.add(href);
-
-      // 날짜 추출 (URL에서 YYYYMMDD 형식)
-      const dateMatch = href.match(/\/(\d{4})(\d{2})(\d{2})/);
-      const date = dateMatch
-        ? `${dateMatch[1]}.${dateMatch[2]}.${dateMatch[3]}`
-        : new Date().toLocaleDateString("ko-KR");
+    // [사설] 태그가 있는 글만 필터링
+    if (title.includes("[사설]")) {
+      // pubDate를 YYYY.MM.DD 형식으로 변환
+      const dateObj = new Date(pubDate);
+      const date = `${dateObj.getFullYear()}.${String(dateObj.getMonth() + 1).padStart(2, "0")}.${String(dateObj.getDate()).padStart(2, "0")}`;
 
       editorials.push({
-        title: text,
-        link: href.startsWith("http") ? href : `https://www.hankyung.com${href}`,
+        title,
+        link,
         date,
       });
     }
