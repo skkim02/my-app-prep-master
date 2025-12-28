@@ -1,65 +1,495 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import {
+  Editorial,
+  AiPrepAnalysis,
+  ScrapeResponse,
+  BestPractice,
+} from "./types";
+
+type HighlightType = "point1" | "reason" | "example" | "point2";
+
+const HIGHLIGHT_COLORS: Record<
+  HighlightType,
+  { bg: string; border: string; text: string }
+> = {
+  point1: { bg: "bg-red-100", border: "border-red-400", text: "text-red-700" },
+  reason: {
+    bg: "bg-orange-100",
+    border: "border-orange-400",
+    text: "text-orange-700",
+  },
+  example: {
+    bg: "bg-green-100",
+    border: "border-green-400",
+    text: "text-green-700",
+  },
+  point2: {
+    bg: "bg-purple-100",
+    border: "border-purple-400",
+    text: "text-purple-700",
+  },
+};
+
+const PREP_LABELS: Record<
+  HighlightType,
+  { letter: string; name: string; color: string }
+> = {
+  point1: { letter: "P", name: "핵심 주장", color: "bg-red-500" },
+  reason: { letter: "R", name: "근거", color: "bg-orange-500" },
+  example: { letter: "E", name: "사례/데이터", color: "bg-green-500" },
+  point2: { letter: "P", name: "최종 강조", color: "bg-purple-500" },
+};
 
 export default function Home() {
+  const [editorial, setEditorial] = useState<Editorial | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<AiPrepAnalysis | null>(null);
+  const [bestPractice, setBestPractice] = useState<BestPractice | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeHighlight, setActiveHighlight] = useState<HighlightType | null>(
+    null
+  );
+
+  // 사설 가져오기
+  const fetchEditorial = async () => {
+    setIsLoading(true);
+    setError(null);
+    setAiAnalysis(null);
+    setBestPractice(null);
+
+    try {
+      const res = await fetch("/api/scrape");
+      const data: ScrapeResponse = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          (data as unknown as { error: string }).error ||
+            "사설을 가져오는데 실패했습니다."
+        );
+      }
+
+      setEditorial(data.editorial);
+      setAiAnalysis(data.aiAnalysis);
+      setBestPractice(data.bestPractice);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 하이라이트된 본문 생성
+  const highlightedContent = useMemo(() => {
+    if (!editorial || !aiAnalysis) return null;
+
+    const content = editorial.content;
+    const highlights: { text: string; type: HighlightType }[] = [
+      { text: aiAnalysis.point1.sourceText, type: "point1" },
+      { text: aiAnalysis.reason.sourceText, type: "reason" },
+      { text: aiAnalysis.example.sourceText, type: "example" },
+      { text: aiAnalysis.point2.sourceText, type: "point2" },
+    ];
+
+    // 각 문단별로 처리
+    const paragraphs = content.split("\n\n");
+
+    return paragraphs.map((paragraph, pIdx) => {
+      let result: React.ReactNode[] = [];
+      let remainingText = paragraph;
+      let keyIndex = 0;
+
+      // 각 하이라이트 텍스트를 찾아서 처리
+      for (const highlight of highlights) {
+        if (!highlight.text || !remainingText.includes(highlight.text))
+          continue;
+
+        const parts = remainingText.split(highlight.text);
+        if (parts.length > 1) {
+          // 하이라이트 이전 텍스트
+          if (parts[0]) {
+            result.push(<span key={`${pIdx}-${keyIndex++}`}>{parts[0]}</span>);
+          }
+
+          // 하이라이트된 텍스트
+          const colors = HIGHLIGHT_COLORS[highlight.type];
+          const isActive = activeHighlight === highlight.type;
+          result.push(
+            <span
+              key={`${pIdx}-${keyIndex++}`}
+              className={`relative cursor-pointer border-b-2 ${colors.border} ${
+                isActive ? `${colors.bg} px-1 rounded` : ""
+              } transition-all duration-200`}
+              onMouseEnter={() => setActiveHighlight(highlight.type)}
+              onMouseLeave={() => setActiveHighlight(null)}
+            >
+              {highlight.text}
+              {isActive && (
+                <span
+                  className={`absolute -top-6 left-0 ${colors.bg} ${colors.text} text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10`}
+                >
+                  {PREP_LABELS[highlight.type].letter} -{" "}
+                  {PREP_LABELS[highlight.type].name}
+                </span>
+              )}
+            </span>
+          );
+
+          remainingText = parts.slice(1).join(highlight.text);
+        }
+      }
+
+      // 남은 텍스트
+      if (remainingText) {
+        result.push(<span key={`${pIdx}-${keyIndex++}`}>{remainingText}</span>);
+      }
+
+      return (
+        <p
+          key={pIdx}
+          className="mb-4 text-slate-700 dark:text-slate-300 leading-relaxed"
+        >
+          {result.length > 0 ? result : paragraph}
+        </p>
+      );
+    });
+  }, [editorial, aiAnalysis, activeHighlight]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      {/* 헤더 */}
+      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/80">
+        <div className="mx-auto max-w-7xl px-4 py-6">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            PREP Master
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            한경 사설 분석기 - 읽기만 하는 사설에서, 내 논리로 만드는 사설로
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-8">
+        {/* 사설 가져오기 버튼 */}
+        <div className="mb-8 text-center">
+          <button
+            onClick={fetchEditorial}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {isLoading ? (
+              <>
+                <svg
+                  className="h-5 w-5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                가져오는 중...
+              </>
+            ) : (
+              <>
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                오늘의 사설 가져오기
+              </>
+            )}
+          </button>
         </div>
+
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="mb-8 rounded-lg bg-red-50 p-4 text-center text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* 메인 콘텐츠 - 2단 레이아웃 */}
+        {editorial && aiAnalysis && bestPractice && (
+          <div className="grid gap-8 lg:grid-cols-2">
+            {/* 좌측: 사설 원문 (하이라이트 포함) */}
+            <div className="rounded-xl bg-white p-6 shadow-lg dark:bg-slate-800">
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    한국경제 사설
+                  </span>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    {editorial.date}
+                  </p>
+                </div>
+                <a
+                  href={editorial.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  원문 보기 &rarr;
+                </a>
+              </div>
+              <h2 className="mb-4 text-xl font-bold text-slate-900 dark:text-white">
+                {editorial.title}
+              </h2>
+
+              {/* 하이라이트 범례 */}
+              <div className="mb-4 flex flex-wrap gap-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400 mr-2">
+                  색상 범례:
+                </span>
+                {(Object.keys(PREP_LABELS) as HighlightType[]).map((type) => (
+                  <span
+                    key={type}
+                    className={`flex items-center gap-1 text-xs cursor-pointer transition-opacity ${
+                      activeHighlight && activeHighlight !== type
+                        ? "opacity-50"
+                        : ""
+                    }`}
+                    onMouseEnter={() => setActiveHighlight(type)}
+                    onMouseLeave={() => setActiveHighlight(null)}
+                  >
+                    <span
+                      className={`${PREP_LABELS[type].color} text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px]`}
+                    >
+                      {PREP_LABELS[type].letter}
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-300">
+                      {PREP_LABELS[type].name}
+                    </span>
+                  </span>
+                ))}
+              </div>
+
+              {/* 하이라이트된 본문 */}
+              <div className="prose prose-slate max-h-[500px] overflow-y-auto dark:prose-invert pr-2">
+                {highlightedContent}
+              </div>
+            </div>
+
+            {/* 우측: AI 분석 + Best Practice */}
+            <div className="space-y-6">
+              {/* AI 분석 결과 */}
+              <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-6 shadow-lg dark:from-slate-800 dark:to-slate-700">
+                <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+                  <svg
+                    className="h-5 w-5 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                    />
+                  </svg>
+                  AI 분석 결과
+                </h3>
+                <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+                  사설에서 추출한 PREP 구조입니다. 밑줄 친 부분이 해당 내용의
+                  출처입니다.
+                </p>
+
+                <div className="space-y-4">
+                  {(Object.keys(PREP_LABELS) as HighlightType[]).map((type) => {
+                    const label = PREP_LABELS[type];
+                    const analysis = aiAnalysis[type];
+                    const colors = HIGHLIGHT_COLORS[type];
+
+                    return (
+                      <div
+                        key={type}
+                        className={`rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800 border-l-4 ${colors.border} cursor-pointer transition-all ${
+                          activeHighlight === type
+                            ? "ring-2 ring-offset-2 ring-blue-500"
+                            : ""
+                        }`}
+                        onMouseEnter={() => setActiveHighlight(type)}
+                        onMouseLeave={() => setActiveHighlight(null)}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span
+                            className={`${label.color} text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold`}
+                          >
+                            {label.letter}
+                          </span>
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {label.name}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+                          {analysis.summary}
+                        </p>
+                        <div
+                          className={`text-xs ${colors.bg} ${colors.text} p-2 rounded border ${colors.border}`}
+                        >
+                          <span className="font-medium">원문:</span> &ldquo;
+                          {analysis.sourceText.slice(0, 100)}
+                          {analysis.sourceText.length > 100 ? "..." : ""}
+                          &rdquo;
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Best Practice - AI 작성 예시 */}
+              <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 p-6 shadow-lg dark:from-slate-800 dark:to-slate-700">
+                <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+                  <svg
+                    className="h-5 w-5 text-emerald-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                    />
+                  </svg>
+                  Best Practice - AI 작성 예시
+                </h3>
+                <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+                  아래는 AI가 작성한 모범 PREP 분석입니다. 이 예시를 참고하여
+                  본인만의 분석을 연습해보세요.
+                </p>
+
+                <div className="space-y-4">
+                  {(Object.keys(PREP_LABELS) as HighlightType[]).map((type) => {
+                    const label = PREP_LABELS[type];
+                    const colors = HIGHLIGHT_COLORS[type];
+                    const practiceText = bestPractice[type];
+
+                    return (
+                      <div
+                        key={type}
+                        className={`rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800 border-l-4 ${colors.border}`}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          <span
+                            className={`${label.color} text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold`}
+                          >
+                            {label.letter}
+                          </span>
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {label.name}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-3">
+                          <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                            {practiceText}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 연습 팁 */}
+                <div className="mt-6 rounded-lg bg-white/50 dark:bg-slate-700/50 p-4 border border-emerald-200 dark:border-slate-600">
+                  <h4 className="font-semibold text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-2">
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    연습 팁
+                  </h4>
+                  <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                    <li>
+                      1. 위의 AI 분석 결과에서 원문 출처를 확인하세요.
+                    </li>
+                    <li>
+                      2. Best Practice 예시를 읽고 구조를 파악하세요.
+                    </li>
+                    <li>
+                      3. 노트에 본인만의 PREP 분석을 작성해보세요.
+                    </li>
+                    <li>
+                      4. AI 예시와 비교하며 개선점을 찾아보세요.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 초기 상태 안내 */}
+        {!editorial && !isLoading && !error && (
+          <div className="text-center">
+            <div className="mx-auto max-w-md rounded-xl bg-white p-8 shadow-lg dark:bg-slate-800">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
+                <svg
+                  className="h-8 w-8 text-blue-600 dark:text-blue-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </div>
+              <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
+                시작하기
+              </h2>
+              <p className="text-slate-600 dark:text-slate-400">
+                위의 &quot;오늘의 사설 가져오기&quot; 버튼을 클릭하여 한국경제
+                사설을 불러오고 PREP 구조 분석을 시작하세요.
+              </p>
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* 푸터 */}
+      <footer className="mt-auto border-t border-slate-200 bg-white py-6 dark:border-slate-700 dark:bg-slate-900">
+        <div className="mx-auto max-w-7xl px-4 text-center text-sm text-slate-500 dark:text-slate-400">
+          PREP Master - 논리적 글쓰기 훈련 도구
+        </div>
+      </footer>
     </div>
   );
 }
