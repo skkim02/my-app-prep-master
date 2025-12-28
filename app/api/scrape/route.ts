@@ -146,7 +146,7 @@ function analyzePREP(content: string, title: string): AiPrepAnalysis {
   };
 }
 
-// Best Practice 생성 함수 - 다른 사람에게 주장하듯이 작성
+// Best Practice 생성 함수 - 다른 사람에게 주장하듯이 작성 (사설 문체 유지)
 function generateBestPractice(
   title: string,
   aiAnalysis: AiPrepAnalysis
@@ -154,10 +154,10 @@ function generateBestPractice(
   const cleanTitle = title.replace(/\[사설\]\s*/, "");
 
   return {
-    point1: `저는 "${cleanTitle}"에 대해 말씀드리고 싶습니다. 지금 이 문제가 왜 중요한지 아십니까? 현재 상황을 그냥 두면 안 되는 이유가 분명히 있습니다.`,
-    reason: `왜 그렇게 생각하느냐고요? ${aiAnalysis.reason.sourceText} 이런 상황이 계속되면 문제는 더 심각해질 수밖에 없습니다.`,
-    example: `실제로 어떤 일이 벌어지고 있는지 보여드리겠습니다. ${aiAnalysis.example.sourceText} 이것은 단순한 이론이 아니라 지금 현실에서 일어나고 있는 일입니다.`,
-    point2: `그래서 제가 드리고 싶은 말씀은 이것입니다. ${aiAnalysis.point2.sourceText} 더 이상 미룰 수 없는 문제입니다. 지금 바로 변화가 필요합니다.`,
+    point1: `"${cleanTitle}" 문제를 짚어보자. ${aiAnalysis.point1.sourceText}`,
+    reason: `왜 그런가. ${aiAnalysis.reason.sourceText}`,
+    example: `실제로 ${aiAnalysis.example.sourceText}`,
+    point2: `결론적으로 ${aiAnalysis.point2.sourceText}`,
   };
 }
 
