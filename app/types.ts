@@ -5,6 +5,16 @@ export interface Editorial {
   link: string;
 }
 
+export interface EditorialListItem {
+  title: string;
+  link: string;
+  date: string;
+}
+
+export interface EditorialListResponse {
+  editorials: EditorialListItem[];
+}
+
 export interface PrepItem {
   summary: string; // AI가 분석한 요약
   sourceText: string; // 원문에서 추출한 문장
