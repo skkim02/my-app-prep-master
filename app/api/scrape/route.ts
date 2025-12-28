@@ -171,11 +171,19 @@ async function fetchEditorialList(): Promise<EditorialListItem[]> {
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
       "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
     },
+    next: { revalidate: 0 },
   });
 
   if (!listRes.ok) {
-    throw new Error("Failed to fetch editorial list");
+    throw new Error(`Failed to fetch editorial list (HTTP ${listRes.status})`);
   }
 
   const listHtml = await listRes.text();
@@ -219,7 +227,14 @@ async function fetchEditorialDetail(articleUrl: string): Promise<Editorial> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
     },
+    next: { revalidate: 0 },
   });
 
   if (!articleRes.ok) {

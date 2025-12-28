@@ -134,16 +134,15 @@ export default function Home() {
 
     try {
       const res = await fetch("/api/scrape");
-      const data: EditorialListResponse = await res.json();
+      const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(
-          (data as unknown as { error: string }).error ||
-            "사설 목록을 가져오는데 실패했습니다."
-        );
+        const errorMsg = data.error || "사설 목록을 가져오는데 실패했습니다.";
+        const details = data.details ? ` (${data.details})` : "";
+        throw new Error(errorMsg + details);
       }
 
-      setEditorialList(data.editorials);
+      setEditorialList((data as EditorialListResponse).editorials);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다."
